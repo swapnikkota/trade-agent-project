@@ -110,6 +110,16 @@ class Settings(BaseSettings):
     # string is stripped in database_url below and this flag used instead.
     postgres_ssl: bool = False
 
+    # Which Postgres schema this app's tables live in. Empty (the default)
+    # means "whatever the connection's default search_path resolves to" —
+    # normally "public", fine for a local/standalone database. Set this
+    # when the database is shared with other apps via separate schemas
+    # (e.g. one Neon project/database holding both this app's "trade_agent"
+    # schema and the trades-api's "tradesdb" schema) — the unqualified
+    # table names in app/db/models.py then resolve via this schema being
+    # first on the connection's search_path (see app/db/session.py).
+    postgres_schema: str = ""
+
     # How many most-recent messages to feed back into the agent as context.
     # Phase 2: simple sliding window. A later phase can swap this for
     # summarization once conversations get long.
