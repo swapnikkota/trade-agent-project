@@ -1,0 +1,65 @@
+services:
+  # Agent backend — FastAPI, deepagents, Groq, Postgres-backed thread
+  # history, talks to the trades-mcp service (from the trades-api repo).
+  - type: web
+    runtime: python
+    name: trade-agent-backend
+    rootDir: backend
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: MODEL_PROVIDER
+        value: groq
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_MODEL
+        value: llama-3.3-70b-versatile
+      - key: TRADE_MCP_TRANSPORT
+        value: http
+      # The deployed trades-mcp service's streamable_http endpoint, e.g.
+      # https://trades-mcp-xxxx.onrender.com/mcp (no trailing /sse — that
+      # suffix is what tells registry.py to use the SSE transport instead).
+      - key: TRADE_MCP_URL
+        sync: false
+      # Full Neon connection string for the "trade_agent" database (thread
+      # history — separate database from trades-api's "tradesdb").
+      - key: DATABASE_URL
+        sync: false
+      - key: POSTGRES_SSL
+        value: "true"
+      # Shared-secret API key (Phase 6). Leave unset to keep auth off, or
+      # set a random value here and match it in the frontend's
+      # VITE_API_KEY build env var below.
+      - key: API_KEY
+        sync: false
+      # The deployed frontend's Render URL, once known (Static Sites don't
+      # get a stable URL until the first deploy, so this is a two-step
+      # deploy: get the frontend's URL, then come back and set this).
+      - key: CORS_ORIGINS
+        sync: false
+      - key: LANGFUSE_PUBLIC_KEY
+        sync: false
+      - key: LANGFUSE_SECRET_KEY
+        sync: false
+      - key: LANGFUSE_HOST
+        value: https://cloud.langfuse.com
+
+  # Frontend — React/Vite, built as a static bundle and served from
+  # Render's CDN. Always free; doesn't share the 750 free-instance-hours
+  # pool the two web services above do.
+  - type: web
+    runtime: static
+    name: trade-agent-frontend
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    envVars:
+      # The deployed backend service's Render URL (no trailing slash).
+      - key: VITE_API_BASE_URL
+        sync: false
+      # Must match the backend's API_KEY above exactly, or every request
+      # from the UI gets a 401. Leave both unset to keep auth off.
+      - key: VITE_API_KEY
+        sync: false
