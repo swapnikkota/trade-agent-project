@@ -15,7 +15,7 @@ services:
       - key: GROQ_API_KEY
         sync: false
       - key: GROQ_MODEL
-        value: llama-3.3-70b-versatile
+        value: openai/gpt-oss-120b
       - key: TRADE_MCP_TRANSPORT
         value: http
       # The deployed trades-mcp service's streamable_http endpoint, e.g.

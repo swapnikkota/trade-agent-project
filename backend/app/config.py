@@ -58,11 +58,18 @@ class Settings(BaseSettings):
     ollama_model: str = "llama3.1:8b"
     ollama_base_url: str = "http://localhost:11434"
 
-    # Groq: free, fast inference. llama-3.3-70b-versatile supports tool
-    # calling reliably, which is why it's the default here over smaller
-    # Groq-hosted models that don't.
+    # Groq: free, fast inference. The Llama model lineup (llama-3.3-70b-
+    # versatile, llama-3.1-8b-instant) is no longer available on at least
+    # some Groq accounts (confirmed live: both 404 "does not exist or you
+    # do not have access to it" despite being listed in Groq's docs) —
+    # Groq's free-tier lineup has shifted toward their OpenAI OSS models.
+    # openai/gpt-oss-120b is the largest of the models this account has
+    # access to that supports tool calling (checked via GET
+    # /openai/v1/models and filtering for "tools" in supported_features —
+    # do that again if this default stops working, rather than guessing
+    # another model name).
     groq_api_key: str = ""
-    groq_model: str = "llama-3.3-70b-versatile"
+    groq_model: str = "openai/gpt-oss-120b"
 
     # Trade MCP server (Phase 1: hardcoded single entry). Still read as a
     # fallback when MCP_SERVERS (below) isn't set, so existing .env files
