@@ -27,6 +27,13 @@ def init_db(settings: Settings) -> AsyncEngine:
         # "sslmode=require" query param (see app/config.py's database_url
         # for why that's stripped out instead of passed through).
         connect_args["ssl"] = ssl.create_default_context()
+    if settings.postgres_schema:
+        # Puts our schema first on the connection's search_path, so the
+        # unqualified table names in app/db/models.py (and create_all's
+        # CREATE TABLE statements) resolve there instead of "public" —
+        # needed when this database is shared with other apps via
+        # separate schemas (see app/config.py's postgres_schema).
+        connect_args["server_settings"] = {"search_path": settings.postgres_schema}
     _engine = create_async_engine(
         settings.database_url, echo=False, pool_pre_ping=True, connect_args=connect_args
     )

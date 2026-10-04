@@ -23,12 +23,21 @@ services:
       # suffix is what tells registry.py to use the SSE transport instead).
       - key: TRADE_MCP_URL
         sync: false
-      # Full Neon connection string for the "trade_agent" database (thread
-      # history — separate database from trades-api's "tradesdb").
+      # Full Neon connection string. This is the SAME value as trades-api's
+      # DATABASE_URL (one Neon database — "neondb" by default — shared via
+      # separate schemas, not two separate databases). Schema separation
+      # happens via POSTGRES_SCHEMA below, not a different connection.
       - key: DATABASE_URL
         sync: false
       - key: POSTGRES_SSL
         value: "true"
+      # This app's schema within the shared database (thread/message
+      # history) — separate from trades-api's "tradesdb" schema. Must
+      # already exist (create it once via Neon's SQL editor:
+      # CREATE SCHEMA IF NOT EXISTS trade_agent;) — this app creates its
+      # tables inside it on startup but won't create the schema itself.
+      - key: POSTGRES_SCHEMA
+        value: trade_agent
       # Shared-secret API key (Phase 6). Leave unset to keep auth off, or
       # set a random value here and match it in the frontend's
       # VITE_API_KEY build env var below.
