@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import type { Message, ProgressStep } from "../lib/types";
 
 interface ChatWindowProps {
@@ -68,6 +70,14 @@ function ProgressPanel({ steps }: { steps: ProgressStep[] }) {
   );
 }
 
+function Markdown({ text }: { text: string }) {
+  return (
+    <div className="markdown">
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
+    </div>
+  );
+}
+
 export function ChatWindow({ messages, streamingAssistant, steps, sending, error, onRetry }: ChatWindowProps) {
   const showStreamingBubble = streamingAssistant !== null && streamingAssistant.length > 0;
   const isEmpty = messages.length === 0 && !showStreamingBubble;
@@ -85,7 +95,9 @@ export function ChatWindow({ messages, streamingAssistant, steps, sending, error
       <div className="chat-window-inner">
         {messages.map((m) => (
           <div key={m.id} className={`bubble-row ${m.role}`}>
-            <div className={`bubble ${m.role}`}>{m.content}</div>
+            <div className={`bubble ${m.role}`}>
+              {m.role === "assistant" ? <Markdown text={m.content} /> : m.content}
+            </div>
           </div>
         ))}
 
@@ -93,7 +105,9 @@ export function ChatWindow({ messages, streamingAssistant, steps, sending, error
 
         {showStreamingBubble && (
           <div className="bubble-row assistant">
-            <div className="bubble assistant">{streamingAssistant}</div>
+            <div className="bubble assistant">
+              <Markdown text={streamingAssistant ?? ""} />
+            </div>
           </div>
         )}
 

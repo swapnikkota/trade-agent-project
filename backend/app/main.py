@@ -175,6 +175,20 @@ def _stringify_content(content) -> str:
     return str(content)
 
 
+def _drop_unanswered_user_messages(messages: list[dict]) -> list[dict]:
+    """
+    Drop user messages that never got a reply (a failed or retried run saves
+    the user's turn but no assistant turn), i.e. any user message directly
+    followed by another user message. They only waste tokens as context.
+    The final message (the current question) is always kept.
+    """
+    return [
+        m
+        for i, m in enumerate(messages)
+        if not (m["role"] == "user" and i + 1 < len(messages) and messages[i + 1]["role"] == "user")
+    ]
+
+
 @app.post("/chat")
 @limiter.limit("20/minute")
 async def chat(request: Request, req: ChatRequest, db: AsyncSession = Depends(get_db)):
@@ -207,8 +221,10 @@ async def chat(request: Request, req: ChatRequest, db: AsyncSession = Depends(ge
     langfuse_handler = build_langfuse_handler()
 
     history = await repository.get_recent_messages(db, req.thread_id, settings.history_window_size)
-    agent_messages = [{"role": m.role, "content": m.content} for m in history]
-    agent_messages.append({"role": "user", "content": req.message})
+    agent_messages = _drop_unanswered_user_messages(
+        [{"role": m.role, "content": m.content} for m in history]
+        + [{"role": "user", "content": req.message}]
+    )
 
     # Persist the user's turn immediately, so it's saved even if the agent
     # run fails partway through.
