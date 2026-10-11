@@ -1,6 +1,7 @@
 """
 deepagents agent factory, instrumented with Langfuse.
 """
+import functools
 from typing import Any, List
 
 from deepagents import create_deep_agent
@@ -176,6 +177,43 @@ READ_ONLY_TOOL_NAMES = frozenset(
 )
 
 
+def normalize_empty_tool_results(tools: List[Any]) -> List[Any]:
+    """
+    Makes an empty MCP tool result safe to send back to the model.
+
+    A tool that finds nothing (e.g. get_trades with no matching rows) comes
+    back from langchain-mcp-adapters as an EMPTY LIST of content blocks.
+    Groq rejects that outright when it's replayed as the tool message on the
+    next model call: HTTP 400 "for 'role:tool' ... minimum number of items
+    is 1". The main agent never hit this because /chat short-circuits on an
+    empty result before another model call happens — but sub-agents (the
+    answer_verifier re-fetching data that doesn't exist) have no such guard,
+    and neither does deepagents' built-in general-purpose sub-agent.
+
+    Fixing it on the tools themselves covers every agent that uses them.
+    "[]" is what _is_empty_tool_result in main.py already treats as "no
+    results", so the main agent's behaviour is unchanged.
+    """
+    for t in tools:
+        original = getattr(t, "coroutine", None)
+        if original is None or getattr(original, "_empty_result_normalized", False):
+            continue
+
+        @functools.wraps(original)
+        async def wrapped(*args: Any, __original: Any = original, **kwargs: Any) -> Any:
+            result = await __original(*args, **kwargs)
+            # content_and_artifact tools return (content, artifact).
+            if isinstance(result, tuple) and len(result) == 2:
+                content, artifact = result
+                if isinstance(content, list) and not content:
+                    return "[]", artifact
+            return result
+
+        wrapped._empty_result_normalized = True  # type: ignore[attr-defined]
+        t.coroutine = wrapped
+    return tools
+
+
 def build_langfuse_handler() -> CallbackHandler:
     """
     Langfuse v3's CallbackHandler reads credentials from the process
@@ -229,6 +267,7 @@ def build_agent(tools: List[Any], settings: Settings):
     later phases.
     """
     model = build_model(settings)
+    tools = normalize_empty_tool_results(tools)
 
     system_prompt = TRADE_AGENT_INSTRUCTIONS
     subagents: List[Any] = []
