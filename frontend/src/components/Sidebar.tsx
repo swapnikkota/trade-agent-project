@@ -2,6 +2,8 @@ import { useState, type KeyboardEvent, type MouseEvent } from "react";
 import type { Thread } from "../lib/types";
 
 interface SidebarProps {
+  /** Mobile only: whether the sidebar is slid open as a drawer (ignored on desktop). */
+  open: boolean;
   userId: string;
   onChangeUser: (userId: string) => void;
   threads: Thread[];
@@ -14,6 +16,7 @@ interface SidebarProps {
 }
 
 export function Sidebar({
+  open,
   userId,
   onChangeUser,
   threads,
@@ -57,7 +60,7 @@ export function Sidebar({
   };
 
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar ${open ? "open" : ""}`}>
       <div className="sidebar-header">
         <label className="user-label">
           User
@@ -115,6 +118,18 @@ export function Sidebar({
                   {t.title || "Untitled conversation"}
                 </div>
               )}
+              {/* Double-click to rename doesn't work on touch screens, so also offer a button. */}
+              <button
+                className="thread-action-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  startEditing(t);
+                }}
+                title="Rename conversation"
+                aria-label="Rename conversation"
+              >
+                ✎
+              </button>
               <button
                 className="thread-delete-btn"
                 onClick={(e) => handleDelete(e, t)}

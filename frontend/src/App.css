@@ -1,6 +1,15 @@
 .app-layout {
   display: flex;
   height: 100vh;
+  /* dvh excludes mobile browsers' collapsing address bar, so the message
+     input isn't pushed below the visible area. Falls back to vh above. */
+  height: 100dvh;
+}
+
+/* Mobile-only chrome — hidden on desktop, shown in the @media block at the bottom. */
+.mobile-header,
+.sidebar-backdrop {
+  display: none;
 }
 
 /* ---------- Sidebar ---------- */
@@ -108,6 +117,7 @@
   white-space: nowrap;
 }
 
+.thread-action-btn,
 .thread-delete-btn {
   flex-shrink: 0;
   background: none;
@@ -122,8 +132,14 @@
   transition: opacity 0.1s, background 0.1s, color 0.1s;
 }
 
+.thread-item:hover .thread-action-btn,
 .thread-item:hover .thread-delete-btn {
   opacity: 1;
+}
+
+.thread-action-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
 }
 
 .thread-delete-btn:hover {
@@ -304,4 +320,108 @@
 .message-input button:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+/* ---------- Long content ---------- */
+
+/* Wide unbroken content (e.g. a trades table the model prints) scrolls
+   inside its own bubble instead of pushing the whole page sideways. */
+.bubble {
+  overflow-x: auto;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Touch devices ---------- */
+
+/* No hover on touch screens, so the per-thread buttons (hidden until hover
+   on desktop) would otherwise be invisible and unreachable. */
+@media (hover: none) {
+  .thread-action-btn,
+  .thread-delete-btn {
+    opacity: 1;
+    font-size: 18px;
+    padding: 6px 10px;
+  }
+}
+
+/* ---------- Mobile layout ---------- */
+
+@media (max-width: 720px) {
+  /* Sidebar becomes a slide-over drawer, toggled from the header's ☰ button. */
+  .sidebar {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 20;
+    width: min(300px, 85vw);
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .sidebar.open {
+    transform: translateX(0);
+  }
+
+  .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    background: rgba(0, 0, 0, 0.5);
+  }
+
+  .mobile-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+    padding: calc(8px + env(safe-area-inset-top)) 12px 8px;
+    background: var(--bg-panel);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .menu-btn {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text);
+    font-size: 18px;
+    line-height: 1;
+    padding: 6px 12px;
+  }
+
+  .mobile-title {
+    flex: 1;
+    min-width: 0;
+    font-size: 14px;
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .chat-window {
+    padding: 16px 12px 0;
+  }
+
+  .bubble {
+    max-width: 92%;
+  }
+
+  .message-input {
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+  }
+
+  /* iOS Safari zooms the whole page when focusing an input under 16px. */
+  .message-input textarea,
+  .user-input,
+  .thread-title-edit {
+    font-size: 16px;
+  }
+
+  .message-input button {
+    padding: 0 14px;
+  }
 }

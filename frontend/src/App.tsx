@@ -20,6 +20,8 @@ export default function App() {
   const [toolCall, setToolCall] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  // Mobile only: whether the conversations sidebar is slid open as a drawer.
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   // The text of the last message that failed to get a reply — kept so the
   // error bubble can offer a one-click retry instead of leaving the user
   // stuck re-typing. Note: retrying resends the message rather than
@@ -162,21 +164,44 @@ export default function App() {
     void sendMessage(text);
   };
 
+  const activeTitle = threads.find((t) => t.id === activeThreadId)?.title;
+
   return (
     <div className="app-layout">
       <Sidebar
+        open={sidebarOpen}
         userId={userId}
         onChangeUser={setUserId}
         threads={threads}
         activeThreadId={activeThreadId}
-        onSelectThread={selectThread}
-        onNewThread={newThread}
+        onSelectThread={(id) => {
+          setSidebarOpen(false);
+          void selectThread(id);
+        }}
+        onNewThread={() => {
+          setSidebarOpen(false);
+          void newThread();
+        }}
         onRenameThread={renameThreadTitle}
         onDeleteThread={deleteThreadById}
         loading={threadsLoading}
       />
 
+      {/* Mobile only (hidden on desktop via CSS): tap-away backdrop for the drawer. */}
+      {sidebarOpen && <div className="sidebar-backdrop" onClick={() => setSidebarOpen(false)} />}
+
       <main className="main-panel">
+        {/* Mobile only (hidden on desktop via CSS): header with the drawer toggle. */}
+        <header className="mobile-header">
+          <button
+            className="menu-btn"
+            onClick={() => setSidebarOpen(true)}
+            aria-label="Open conversations"
+          >
+            ☰
+          </button>
+          <div className="mobile-title">{activeTitle || "Trade Agent"}</div>
+        </header>
         {activeThreadId ? (
           <>
             <ChatWindow
