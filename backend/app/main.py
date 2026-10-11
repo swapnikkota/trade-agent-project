@@ -275,7 +275,11 @@ async def chat(request: Request, req: ChatRequest, db: AsyncSession = Depends(ge
                         ),
                     }
 
-                    if is_empty:
+                    # "task" is deepagents' sub-agent tool (portfolio_analyst /
+                    # answer_verifier): its result is a sub-agent's reply, not
+                    # a data lookup, so a blank one must not be mistaken for
+                    # "no matching trades" and end the whole turn.
+                    if is_empty and tool_name != "task":
                         logger.info("Short-circuiting: empty tool result from %s", tool_name)
                         # Structural safeguard (see _is_empty_tool_result):
                         # stop here rather than letting the graph continue

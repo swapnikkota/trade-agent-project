@@ -132,6 +132,17 @@ class Settings(BaseSettings):
     # summarization once conversations get long.
     history_window_size: int = 20
 
+    # Sub-agents (see app/agent/factory.py). Each one is extra model calls,
+    # which counts against Groq's free-tier rate limits and adds latency, so
+    # both are kill-switchable via env without a code change:
+    #   SUBAGENTS_ENABLED=false  -> no sub-agents at all (single agent, as before)
+    #   VERIFIER_ENABLED=false   -> keep the portfolio analyst, drop the
+    #                               answer verifier (the more expensive one,
+    #                               since it re-queries trades on every
+    #                               answer that cites specific trades)
+    subagents_enabled: bool = True
+    verifier_enabled: bool = True
+
     @property
     def database_url(self) -> str:
         if self.database_url_override:

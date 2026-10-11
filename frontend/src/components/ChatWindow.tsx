@@ -19,6 +19,8 @@ function friendlyToolLabel(tool: string): string {
     get_trades: "Looking up trades…",
     get_trade_by_id: "Looking up trade details…",
     create_trade: "Recording trade…",
+    // deepagents sub-agents (portfolio analyst / answer verifier)
+    task: "Double-checking the details…",
     // market_data MCP server (Phase 5 test server)
     get_quote: "Checking the latest quote…",
   };
