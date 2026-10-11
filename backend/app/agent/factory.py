@@ -119,6 +119,12 @@ the verification step to the user unless a correction changes the answer.
 Skip the verifier for answers that state no individual trade details (e.g.
 "no matching trades found", clarifying questions) and for create_trade
 confirmations.
+Also skip it when your answer is just the portfolio_analyst's report passed
+along — the analyst copies its figures straight from the same tools the
+verifier would re-query, so checking it again only adds delay. The verifier
+is for answers you assembled yourself from direct lookups (get_trades,
+get_recent_trades, get_trade_by_id, ...), where a symbol or price mix-up can
+slip in.
 """
 
 PORTFOLIO_ANALYST_PROMPT = """You are a portfolio analyst working from a trade database.
