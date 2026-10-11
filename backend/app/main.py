@@ -31,6 +31,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import EventSourceResponse
 
 from app.agent.factory import build_agent, build_langfuse_handler
+from app.agent.status import status_event
 from app.api.threads import router as threads_router
 from app.config import get_settings
 from app.db import repository
@@ -224,7 +225,7 @@ async def chat(request: Request, req: ChatRequest, db: AsyncSession = Depends(ge
             # couldn't show real token-by-token streaming). Tool messages
             # still arrive as one complete ToolMessage chunk either way, so
             # the empty-result short-circuit logic below is unchanged.
-            async for message_chunk, metadata in agent.astream(
+            async for namespace, (message_chunk, metadata) in agent.astream(
                 {"messages": agent_messages},
                 config={
                     "callbacks": [langfuse_handler],
@@ -234,7 +235,21 @@ async def chat(request: Request, req: ChatRequest, db: AsyncSession = Depends(ge
                     },
                 },
                 stream_mode="messages",
+                # subgraphs=True also yields what sub-agents (portfolio_analyst /
+                # answer_verifier) do inside the `task` tool, so the UI can show
+                # live progress. Their chunks carry a non-empty `namespace`.
+                subgraphs=True,
             ):
+                # Live progress for the UI: tool starts/finishes, from any depth.
+                status = status_event(namespace, message_chunk)
+                if status is not None:
+                    yield {"event": "message", "data": json.dumps(status)}
+
+                if namespace:
+                    # Sub-agent output is internal: never part of the visible
+                    # reply, never subject to the empty-result short-circuit.
+                    continue
+
                 msg_type = getattr(message_chunk, "type", None)
                 logger.info(
                     "Stream chunk: msg_type=%s name=%s node=%s",

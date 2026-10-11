@@ -1,9 +1,11 @@
-import type { Message } from "../lib/types";
+import { useEffect, useState } from "react";
+import type { Message, ProgressStep } from "../lib/types";
 
 interface ChatWindowProps {
   messages: Message[];
   streamingAssistant: string | null;
-  toolCall: string | null;
+  steps: ProgressStep[];
+  sending: boolean;
   error: string | null;
   // Present only when there's a failed message to resend; its absence
   // hides the Retry button rather than rendering it disabled.
@@ -18,16 +20,55 @@ function friendlyToolLabel(tool: string): string {
     // trade MCP server
     get_trades: "Looking up trades…",
     get_trade_by_id: "Looking up trade details…",
+    get_trade_summary: "Summarizing your portfolio…",
+    get_largest_trades: "Finding your largest trades…",
+    get_trades_by_symbol_analysis: "Analyzing trades by symbol…",
+    detect_large_trades: "Scanning for unusually large trades…",
+    get_recent_trades: "Checking recent trades…",
     create_trade: "Recording trade…",
     // deepagents sub-agents (portfolio analyst / answer verifier)
-    task: "Double-checking the details…",
+    task: "Delegating to a specialist…",
     // market_data MCP server (Phase 5 test server)
     get_quote: "Checking the latest quote…",
   };
   return known[tool] ?? `Using ${tool}…`;
 }
 
-export function ChatWindow({ messages, streamingAssistant, toolCall, error, onRetry }: ChatWindowProps) {
+function ProgressPanel({ steps }: { steps: ProgressStep[] }) {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    const started = Date.now();
+    const id = setInterval(() => setElapsed(Math.floor((Date.now() - started) / 1000)), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const current = [...steps].reverse().find((s) => !s.done);
+  const trail = steps.filter((s) => s.done).slice(-4);
+  // After ~20s with nothing new it's most likely a rate-limit wait on the model.
+  const label = current ? friendlyToolLabel(current.tool) : steps.length ? "Thinking…" : "Starting…";
+
+  return (
+    <div className="bubble-row assistant">
+      <div className="bubble tool-indicator progress-panel">
+        <div className="progress-current">
+          <span className="progress-spinner" aria-hidden="true" />
+          <span>{label}</span>
+          <span className="progress-elapsed">{elapsed}s</span>
+        </div>
+        {trail.length > 0 && (
+          <ul className="progress-trail">
+            {trail.map((s) => (
+              <li key={s.key}>✓ {friendlyToolLabel(s.tool).replace(/…$/, "")}</li>
+            ))}
+          </ul>
+        )}
+        {elapsed >= 20 && <div className="progress-hint">Still working — the model may be rate-limited.</div>}
+      </div>
+    </div>
+  );
+}
+
+export function ChatWindow({ messages, streamingAssistant, steps, sending, error, onRetry }: ChatWindowProps) {
   const showStreamingBubble = streamingAssistant !== null && streamingAssistant.length > 0;
   const isEmpty = messages.length === 0 && !showStreamingBubble;
 
@@ -48,11 +89,7 @@ export function ChatWindow({ messages, streamingAssistant, toolCall, error, onRe
           </div>
         ))}
 
-        {toolCall && (
-          <div className="bubble-row assistant">
-            <div className="bubble tool-indicator">{friendlyToolLabel(toolCall)}</div>
-          </div>
-        )}
+        {sending && !showStreamingBubble && <ProgressPanel steps={steps} />}
 
         {showStreamingBubble && (
           <div className="bubble-row assistant">

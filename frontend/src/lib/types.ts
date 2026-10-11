@@ -20,5 +20,15 @@ export type ChatEvent =
   // the full message each time, unlike the old "assistant" event it
   // replaced.
   | { type: "assistant_delta"; content: string }
+  // Live progress: a tool call started or finished. `nested` means it ran
+  // inside a sub-agent (portfolio analyst / answer verifier).
+  | { type: "status"; phase: "start" | "done"; id: string | null; tool: string; nested: boolean }
   | { type: "done" }
   | { type: "error"; content: string };
+
+export interface ProgressStep {
+  key: string;
+  tool: string;
+  nested: boolean;
+  done: boolean;
+}

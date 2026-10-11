@@ -3,7 +3,7 @@ import { ChatWindow } from "./components/ChatWindow";
 import { MessageInput } from "./components/MessageInput";
 import { Sidebar } from "./components/Sidebar";
 import { createThread, deleteThread, getThreadMessages, listThreads, renameThread, streamChat } from "./lib/api";
-import type { Message, Thread } from "./lib/types";
+import type { Message, ProgressStep, Thread } from "./lib/types";
 import "./App.css";
 
 const USER_ID_STORAGE_KEY = "trade-agent.user-id";
@@ -17,7 +17,7 @@ export default function App() {
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [streamingAssistant, setStreamingAssistant] = useState<string | null>(null);
-  const [toolCall, setToolCall] = useState<string | null>(null);
+  const [steps, setSteps] = useState<ProgressStep[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   // Mobile only: whether the conversations sidebar is slid open as a drawer.
@@ -49,7 +49,7 @@ export default function App() {
     setActiveThreadId(threadId);
     setError(null);
     setStreamingAssistant(null);
-    setToolCall(null);
+    setSteps([]);
     try {
       const history = await getThreadMessages(threadId);
       setMessages(history);
@@ -98,7 +98,7 @@ export default function App() {
     setError(null);
     setLastFailedMessage(null);
     setSending(true);
-    setToolCall(null);
+    setSteps([]);
     setStreamingAssistant("");
 
     // Optimistic local echo of the user's message; the canonical copy
@@ -122,10 +122,29 @@ export default function App() {
         threadId: activeThreadId,
         signal: controller.signal,
       })) {
-        if (event.type === "tool_result") {
-          setToolCall(event.tool);
+        if (event.type === "status") {
+          setSteps((prev) => {
+            if (event.phase === "start") {
+              const key = event.id ?? `${event.tool}-${prev.length}`;
+              return prev.some((s) => s.key === key)
+                ? prev
+                : [...prev, { key, tool: event.tool, nested: event.nested, done: false }];
+            }
+            // finish: mark the matching step (by id, else last unfinished same-tool step)
+            let marked = false;
+            return [...prev]
+              .reverse()
+              .map((s) => {
+                if (!marked && !s.done && (event.id ? s.key === event.id : s.tool === event.tool)) {
+                  marked = true;
+                  return { ...s, done: true };
+                }
+                return s;
+              })
+              .reverse();
+          });
         } else if (event.type === "assistant_delta") {
-          setToolCall(null);
+          setSteps([]);
           // Append this chunk onto whatever's streamed in so far, rather
           // than replacing — assistant_delta events are incremental.
           setStreamingAssistant((prev) => (prev ?? "") + event.content);
@@ -151,7 +170,7 @@ export default function App() {
       setLastFailedMessage(text);
     } finally {
       setStreamingAssistant(null);
-      setToolCall(null);
+      setSteps([]);
       setSending(false);
       abortRef.current = null;
     }
@@ -207,7 +226,8 @@ export default function App() {
             <ChatWindow
               messages={messages}
               streamingAssistant={streamingAssistant}
-              toolCall={toolCall}
+              steps={steps}
+              sending={sending}
               error={error}
               onRetry={lastFailedMessage ? retryLastMessage : undefined}
             />
