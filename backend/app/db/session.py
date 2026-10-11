@@ -58,6 +58,12 @@ def init_db(settings: Settings) -> AsyncEngine:
             cursor = dbapi_connection.cursor()
             cursor.execute(f"SET search_path TO {schema}")
             cursor.close()
+            # Commit, or the SET stays inside the adapter's implicit
+            # transaction and is rolled back when a read-only request's
+            # session closes — leaving that connection on the default
+            # "$user", public (confirmed live via /debug/db: ~1 in 6
+            # concurrent connections came back with the default path).
+            dbapi_connection.commit()
 
     _sessionmaker = async_sessionmaker(_engine, expire_on_commit=False)
     return _engine
