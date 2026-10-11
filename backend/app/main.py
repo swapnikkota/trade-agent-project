@@ -27,7 +27,6 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import EventSourceResponse
 
@@ -120,25 +119,6 @@ class ChatRequest(BaseModel):
 async def health():
     return {"status": "ok"}
 
-
-@app.get("/debug/db")
-async def debug_db(db: AsyncSession = Depends(get_db)):
-    """TEMPORARY diagnostic endpoint — remove once the threads/messages
-    schema issue is resolved."""
-    search_path = (await db.execute(text("SHOW search_path"))).scalar()
-    current_user = (await db.execute(text("SELECT current_user"))).scalar()
-    current_db = (await db.execute(text("SELECT current_database()"))).scalar()
-    tables = (await db.execute(text(
-        "SELECT table_schema, table_name FROM information_schema.tables "
-        "WHERE table_name IN ('users', 'threads', 'messages') "
-        "ORDER BY table_schema, table_name"
-    ))).fetchall()
-    return {
-        "search_path_reported_by_server": search_path,
-        "current_user": current_user,
-        "current_database": current_db,
-        "tables_found": [{"schema": r[0], "table": r[1]} for r in tables],
-    }
 
 
 def _is_empty_tool_result(content: str) -> bool:
