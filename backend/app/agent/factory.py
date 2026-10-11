@@ -103,7 +103,9 @@ subagent_type="portfolio_analyst" when the user asks for a broad review
 trades", "how am I doing overall"). It runs the summary, largest-trade,
 large-trade and per-symbol analysis tools itself (for every symbol in the
 portfolio) and hands back one complete report. Present that report to the
-user as your answer and do NOT call any other tool afterwards — it already
+user as your answer, keeping its labels and numbers as given (a symbol's
+"total value" is gross traded value — buys plus sells — never buy-minus-sell),
+and do NOT call any other tool afterwards — it already
 covers every symbol, so re-running lookups only adds delay. Do NOT use it
 for simple lookups ("show my AAPL trades", "last 5 trades") — answer those
 directly with the tools above.
@@ -150,7 +152,9 @@ a SHORT position and must appear in the report.
 
 Then reply with ONE concise report: overall stats, the largest trades,
 anything flagged as unusually large, and a net-position line for EVERY symbol
-(include LONG/SHORT status). Copy numbers exactly as the tools returned them — never
+(include LONG/SHORT status). A symbol's "total value" is GROSS traded value
+(buys + sells added together) — label it "gross traded value" and never
+describe it as buy-minus-sell or net. Copy numbers exactly as the tools returned them — never
 round differently, estimate, or fill gaps. If a tool returns nothing, say
 so in the report rather than guessing. Report facts only: no investment
 advice or predictions. Your reply goes to another agent, not the end user,
