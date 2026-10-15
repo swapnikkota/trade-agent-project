@@ -1,0 +1,42 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+#
+# Template for the gateway's config. Do NOT commit real keys.
+# On Render: service trade-agent-gateway -> Environment -> Secret Files ->
+# add a file named config.yaml with this content, replacing REPLACE_ME with
+# a long random string (this is what the backend sends as LLM_GATEWAY_API_KEY).
+# The Groq key itself comes from the GROQ_API_KEY env var on the gateway.
+#
+# Structure follows agentgateway's "routing-based configuration" docs; if the
+# gateway rejects it at startup, the error in the Render logs names the field.
+
+gateways:
+  default:
+    port: 3000
+    protocol: HTTP
+    # Callers must present a valid key (strict), otherwise anyone who finds
+    # the URL could spend the Groq quota.
+    apiKey:
+      mode: strict
+      keys:
+      - key: REPLACE_ME
+        metadata:
+          user: trade-agent-backend
+
+routes:
+- backends:
+  - ai:
+      name: groq
+      hostOverride: api.groq.com:443
+      provider:
+        # Groq is OpenAI-compatible. No `model:` override, so the model the
+        # backend asks for (GROQ_MODEL) is passed through unchanged.
+        openAI: {}
+  policies:
+    urlRewrite:
+      authority:
+        full: api.groq.com
+      path:
+        full: "/openai/v1/chat/completions"
+    backendTLS: {}
+    backendAuth:
+      key: "$GROQ_API_KEY"

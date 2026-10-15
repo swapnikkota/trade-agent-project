@@ -273,6 +273,17 @@ def build_model(settings: Settings):
     elif settings.model_provider == "groq":
         from langchain_groq import ChatGroq
 
+        if settings.llm_gateway_url:
+            # Same ChatGroq client (same tool-calling/reasoning handling),
+            # just pointed at the gateway. The Groq SDK appends
+            # /openai/v1/... to the base URL; the gateway ignores the path
+            # and forwards to Groq (see gateway/config.example.yaml).
+            return ChatGroq(
+                model=settings.groq_model,
+                api_key=settings.llm_gateway_api_key,
+                groq_api_base=settings.llm_gateway_url.rstrip("/"),
+                temperature=0,
+            )
         return ChatGroq(
             model=settings.groq_model,
             api_key=settings.groq_api_key,

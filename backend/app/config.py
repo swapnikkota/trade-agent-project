@@ -71,6 +71,14 @@ class Settings(BaseSettings):
     groq_api_key: str = ""
     groq_model: str = "openai/gpt-oss-120b"
 
+    # Optional LLM gateway (agentgateway) sitting between this app and Groq.
+    # When LLM_GATEWAY_URL is set (e.g. https://trade-agent-gateway.onrender.com),
+    # Groq calls go to the gateway instead of api.groq.com, authenticated with
+    # LLM_GATEWAY_API_KEY — the real Groq key then lives only on the gateway.
+    # Unset LLM_GATEWAY_URL to go straight to Groq again (instant rollback).
+    llm_gateway_url: str = ""
+    llm_gateway_api_key: str = ""
+
     # Trade MCP server (Phase 1: hardcoded single entry). Still read as a
     # fallback when MCP_SERVERS (below) isn't set, so existing .env files
     # keep working unchanged.

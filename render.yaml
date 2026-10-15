@@ -16,6 +16,13 @@ services:
         sync: false
       - key: GROQ_MODEL
         value: openai/gpt-oss-120b
+      # LLM gateway (see the trade-agent-gateway service below). Set both
+      # to route model calls through it; leave LLM_GATEWAY_URL unset to call
+      # Groq directly (instant rollback, no redeploy of code needed).
+      - key: LLM_GATEWAY_URL
+        sync: false
+      - key: LLM_GATEWAY_API_KEY
+        sync: false
       - key: TRADE_MCP_TRANSPORT
         value: http
       # The deployed trades-mcp service's streamable_http endpoint, e.g.
@@ -54,6 +61,21 @@ services:
         sync: false
       - key: LANGFUSE_HOST
         value: https://cloud.langfuse.com
+
+  # LLM gateway — agentgateway proxying Groq. Holds the real Groq key and
+  # requires its own API key from callers. Config lives in a Render Secret
+  # File (see gateway/config.example.yaml), not in git.
+  - type: web
+    runtime: docker
+    name: trade-agent-gateway
+    rootDir: gateway
+    plan: free
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false
+      # Render routes traffic to $PORT; the gateway config listens on 3000.
+      - key: PORT
+        value: "3000"
 
   # Frontend — React/Vite, built as a static bundle and served from
   # Render's CDN. Always free; doesn't share the 750 free-instance-hours
