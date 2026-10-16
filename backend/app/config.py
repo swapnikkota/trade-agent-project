@@ -151,6 +151,13 @@ class Settings(BaseSettings):
     subagents_enabled: bool = True
     verifier_enabled: bool = True
 
+    # Model the sub-agents run on. Empty = same model as the main agent.
+    # Groq's rate limits are per model, so pointing the sub-agents at a
+    # different model (e.g. SUBAGENT_MODEL=openai/gpt-oss-20b) spreads load
+    # across two limit buckets instead of both hitting gpt-oss-120b's.
+    # Only used with MODEL_PROVIDER=groq; ignored for other providers.
+    subagent_model: str = ""
+
     @property
     def database_url(self) -> str:
         if self.database_url_override:

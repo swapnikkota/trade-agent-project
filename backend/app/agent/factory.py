@@ -2,7 +2,7 @@
 deepagents agent factory, instrumented with Langfuse.
 """
 import functools
-from typing import Any, List
+from typing import Any, List, Optional
 
 from deepagents import create_deep_agent
 from langfuse.langchain import CallbackHandler
@@ -44,6 +44,9 @@ computing net position inline; the dedicated tool is tested and consistent.
 You can still call more than one tool in a turn when a question genuinely
 needs it (e.g. "summarize my trades and flag anything big" → both
 get_trade_summary and detect_large_trades).
+
+Formatting: show trade timestamps as "YYYY-MM-DD HH:MM UTC" (drop seconds,
+fractions and the trailing "Z"), e.g. 2026-10-02 17:38 UTC.
 
 Be concise and precise with numbers. If a query is ambiguous (e.g. missing a
 ticker, date range, or account), ask a clarifying question before calling a
@@ -156,7 +159,8 @@ anything flagged as unusually large, and a net-position line for EVERY symbol
 (buys + sells added together) — label it "gross traded value" and never
 describe it as buy-minus-sell or net. Copy numbers exactly as the tools returned them — never
 round differently, estimate, or fill gaps. If a tool returns nothing, say
-so in the report rather than guessing. Report facts only: no investment
+so in the report rather than guessing. Show any timestamp as "YYYY-MM-DD HH:MM UTC" (no seconds or fractions).
+Report facts only: no investment
 advice or predictions. Your reply goes to another agent, not the end user,
 so skip pleasantries and keep it compact.
 """
@@ -248,7 +252,7 @@ def build_langfuse_handler() -> CallbackHandler:
     return CallbackHandler()
 
 
-def build_model(settings: Settings):
+def build_model(settings: Settings, model_name: Optional[str] = None):
     """
     Builds the chat model deepagents will run on, based on
     settings.model_provider. Swapping providers is a config change only —
@@ -273,19 +277,21 @@ def build_model(settings: Settings):
     elif settings.model_provider == "groq":
         from langchain_groq import ChatGroq
 
+        groq_model = model_name or settings.groq_model
+
         if settings.llm_gateway_url:
             # Same ChatGroq client (same tool-calling/reasoning handling),
             # just pointed at the gateway. The Groq SDK appends
             # /openai/v1/... to the base URL; the gateway ignores the path
             # and forwards to Groq (see gateway/config.example.yaml).
             return ChatGroq(
-                model=settings.groq_model,
+                model=groq_model,
                 api_key=settings.llm_gateway_api_key,
                 groq_api_base=settings.llm_gateway_url.rstrip("/"),
                 temperature=0,
             )
         return ChatGroq(
-            model=settings.groq_model,
+            model=groq_model,
             api_key=settings.groq_api_key,
             temperature=0,
         )
@@ -308,8 +314,12 @@ def build_agent(tools: List[Any], settings: Settings):
     if settings.subagents_enabled:
         read_only_tools = [t for t in tools if t.name in READ_ONLY_TOOL_NAMES]
 
-        # Both sub-agents inherit the main agent's model (no "model" key).
+        # Sub-agents inherit the main agent's model unless SUBAGENT_MODEL is
+        # set (Groq only), which gives them their own rate-limit bucket.
         # Tools are explicit and read-only: neither can call create_trade.
+        subagent_extra: dict = {}
+        if settings.subagent_model and settings.model_provider == "groq":
+            subagent_extra["model"] = build_model(settings, settings.subagent_model)
         subagents.append(
             {
                 "name": "portfolio_analyst",
@@ -321,6 +331,7 @@ def build_agent(tools: List[Any], settings: Settings):
                 ),
                 "system_prompt": PORTFOLIO_ANALYST_PROMPT,
                 "tools": read_only_tools,
+                **subagent_extra,
             }
         )
         system_prompt += PORTFOLIO_ANALYST_DELEGATION
@@ -336,6 +347,7 @@ def build_agent(tools: List[Any], settings: Settings):
                     ),
                     "system_prompt": ANSWER_VERIFIER_PROMPT,
                     "tools": read_only_tools,
+                **subagent_extra,
                 }
             )
             system_prompt += VERIFIER_DELEGATION
