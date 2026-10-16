@@ -156,6 +156,9 @@ class Settings(BaseSettings):
     # different model (e.g. SUBAGENT_MODEL=openai/gpt-oss-20b) spreads load
     # across two limit buckets instead of both hitting gpt-oss-120b's.
     # Only used with MODEL_PROVIDER=groq; ignored for other providers.
+    # CAUTION: tried with openai/gpt-oss-20b and its tool calls failed
+    # (malformed/invalid arguments), so leave this empty unless you have
+    # verified another model handles tool calling reliably here.
     subagent_model: str = ""
 
     @property
