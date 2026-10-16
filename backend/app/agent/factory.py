@@ -275,7 +275,7 @@ def build_model(settings: Settings, model_name: Optional[str] = None):
             temperature=0,
         )
     elif settings.model_provider == "groq":
-        from langchain_groq import ChatGroq
+        from app.agent.groq_retry import RetryingChatGroq as ChatGroq
 
         groq_model = model_name or settings.groq_model
 
