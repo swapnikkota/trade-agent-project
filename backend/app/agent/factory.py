@@ -1,6 +1,7 @@
 """
 deepagents agent factory, instrumented with Langfuse.
 """
+import copy
 import functools
 from typing import Any, List, Optional
 
@@ -227,6 +228,10 @@ def normalize_empty_tool_results(tools: List[Any]) -> List[Any]:
 
         @functools.wraps(original)
         async def wrapped(*args: Any, __original: Any = original, **kwargs: Any) -> Any:
+            # Models often send an explicit null for optional params they
+            # mean to omit (see make_optional_args_nullable); the MCP server
+            # would reject null for a number, so drop them: omitted == default.
+            kwargs = {k: v for k, v in kwargs.items() if v is not None}
             result = await __original(*args, **kwargs)
             # content_and_artifact tools return (content, artifact).
             if isinstance(result, tuple) and len(result) == 2:
@@ -237,6 +242,38 @@ def normalize_empty_tool_results(tools: List[Any]) -> List[Any]:
 
         wrapped._empty_result_normalized = True  # type: ignore[attr-defined]
         t.coroutine = wrapped
+    return tools
+
+
+def make_optional_args_nullable(tools: List[Any]) -> List[Any]:
+    """
+    Lets optional tool parameters be null in the schema sent to the model.
+
+    Groq validates the model's tool call against the schema server-side and
+    rejects it outright ("parameters for tool detect_large_trades did not
+    match schema: /threshold_value: expected number, but got null") when the
+    model passes null for an optional number it meant to omit. That aborted
+    a whole chat turn. Accepting null here makes such calls valid; the null
+    is then dropped before the MCP call (see normalize_empty_tool_results).
+    Required parameters are left strict.
+    """
+    for t in tools:
+        schema = getattr(t, "args_schema", None)
+        if not isinstance(schema, dict):
+            continue
+        schema = copy.deepcopy(schema)
+        required = set(schema.get("required", []))
+        for name, prop in (schema.get("properties") or {}).items():
+            if name in required or not isinstance(prop, dict):
+                continue
+            if prop.get("type") == "null" or any(
+                isinstance(o, dict) and o.get("type") == "null" for o in prop.get("anyOf", [])
+            ):
+                continue
+            outer = {k: prop[k] for k in ("description", "default", "title") if k in prop}
+            inner = {k: v for k, v in prop.items() if k not in outer}
+            schema["properties"][name] = {**outer, "anyOf": [inner, {"type": "null"}]}
+        t.args_schema = schema
     return tools
 
 
@@ -306,7 +343,7 @@ def build_agent(tools: List[Any], settings: Settings):
     later phases.
     """
     model = build_model(settings)
-    tools = normalize_empty_tool_results(tools)
+    tools = make_optional_args_nullable(normalize_empty_tool_results(tools))
 
     system_prompt = TRADE_AGENT_INSTRUCTIONS
     subagents: List[Any] = []

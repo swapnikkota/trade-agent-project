@@ -20,7 +20,7 @@ from langchain_groq import ChatGroq
 logger = logging.getLogger("trade_agent")
 
 MAX_PARSE_RETRIES = 2
-_MARKERS = ("parsing failed", "failed_generation", "tool_use_failed")
+_MARKERS = ("parsing failed", "failed_generation", "tool_use_failed", "tool call validation failed")
 
 
 def is_parse_failure(exc: BaseException) -> bool:
