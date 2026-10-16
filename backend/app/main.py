@@ -35,6 +35,8 @@ from app.agent.status import status_event
 from app.api.threads import router as threads_router
 from app.config import get_settings
 from app.db import repository
+from app.errors import friendly_error
+from app.langfuse_check import langfuse_credentials_ok
 from app.db.session import create_all_tables, dispose_db, get_db, init_db
 from app.mcp.registry import get_mcp_tools
 from app.rate_limit import API_KEY_HEADER, limiter
@@ -42,7 +44,7 @@ from app.rate_limit import API_KEY_HEADER, limiter
 logging.basicConfig(level=get_settings().log_level)
 logger = logging.getLogger("trade_agent")
 
-_state = {"agent": None}
+_state = {"agent": None, "tracing": True}
 
 
 @asynccontextmanager
@@ -54,6 +56,10 @@ async def lifespan(app: FastAPI):
         "groq": settings.groq_model,
     }[settings.model_provider]
     logger.info("Model provider: %s | Model: %s", settings.model_provider, active_model)
+
+    _state["tracing"] = langfuse_credentials_ok(
+        settings.langfuse_host, settings.langfuse_public_key, settings.langfuse_secret_key
+    )
 
     logger.info("Connecting to Postgres and ensuring tables exist...")
     init_db(settings)
@@ -218,7 +224,7 @@ async def chat(request: Request, req: ChatRequest, db: AsyncSession = Depends(ge
 
     settings = get_settings()
     agent = _state["agent"]
-    langfuse_handler = build_langfuse_handler()
+    langfuse_handler = build_langfuse_handler() if _state.get("tracing") else None
 
     history = await repository.get_recent_messages(db, req.thread_id, settings.history_window_size)
     agent_messages = _drop_unanswered_user_messages(
@@ -244,7 +250,7 @@ async def chat(request: Request, req: ChatRequest, db: AsyncSession = Depends(ge
             async for namespace, (message_chunk, metadata) in agent.astream(
                 {"messages": agent_messages},
                 config={
-                    "callbacks": [langfuse_handler],
+                    "callbacks": [langfuse_handler] if langfuse_handler else [],
                     "metadata": {
                         "langfuse_user_id": req.user_id,
                         "langfuse_session_id": str(req.thread_id),
@@ -370,6 +376,6 @@ async def chat(request: Request, req: ChatRequest, db: AsyncSession = Depends(ge
             yield {"event": "message", "data": json.dumps({"type": "done"})}
         except Exception as exc:  # noqa: BLE001
             logger.exception("Agent run failed")
-            yield {"event": "message", "data": json.dumps({"type": "error", "content": str(exc)})}
+            yield {"event": "message", "data": json.dumps({"type": "error", "content": friendly_error(exc)})}
 
     return EventSourceResponse(event_generator())
