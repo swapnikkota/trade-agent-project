@@ -59,8 +59,9 @@ services:
         sync: false
       - key: LANGFUSE_SECRET_KEY
         sync: false
+      # US region project (keys are region-specific; EU is https://cloud.langfuse.com).
       - key: LANGFUSE_HOST
-        value: https://cloud.langfuse.com
+        value: https://us.cloud.langfuse.com
 
   # LLM gateway — agentgateway proxying Groq. Holds the real Groq key and
   # requires its own API key from callers. Config lives in a Render Secret
