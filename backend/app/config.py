@@ -149,8 +149,12 @@ class Settings(BaseSettings):
     #                               since it re-queries trades on every
     #                               answer that cites specific trades)
     # Hide deepagents' unused file tools from the model (saves ~2k tokens/call).
-    # Set HIDE_BUILTIN_FILE_TOOLS=false to roll back.
-    hide_builtin_file_tools: bool = True
+    # OFF by default: with all of them hidden, the portfolio_analyst sub-agent's
+    # second model call failed with Groq "Failed to parse tool call arguments
+    # as JSON" (verified: works with the flag false). To experiment, turn it
+    # on and list tools to keep visible, e.g. KEEP_BUILTIN_TOOLS=ls,read_file.
+    hide_builtin_file_tools: bool = False
+    keep_builtin_tools: str = ""
     subagents_enabled: bool = True
     verifier_enabled: bool = True
 

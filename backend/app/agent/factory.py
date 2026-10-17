@@ -348,8 +348,10 @@ UNUSED_BUILTIN_TOOLS = frozenset(
 def hide_unused_builtin_tools(settings: Settings) -> None:
     if not settings.hide_builtin_file_tools:
         return
+    keep = {n.strip() for n in settings.keep_builtin_tools.split(",") if n.strip()}
     register_harness_profile(
-        settings.model_provider, HarnessProfile(excluded_tools=UNUSED_BUILTIN_TOOLS)
+        settings.model_provider,
+        HarnessProfile(excluded_tools=UNUSED_BUILTIN_TOOLS - keep),
     )
 
 
