@@ -148,6 +148,9 @@ class Settings(BaseSettings):
     #                               answer verifier (the more expensive one,
     #                               since it re-queries trades on every
     #                               answer that cites specific trades)
+    # Hide deepagents' unused file tools from the model (saves ~2k tokens/call).
+    # Set HIDE_BUILTIN_FILE_TOOLS=false to roll back.
+    hide_builtin_file_tools: bool = True
     subagents_enabled: bool = True
     verifier_enabled: bool = True
 

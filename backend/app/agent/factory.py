@@ -5,7 +5,7 @@ import copy
 import functools
 from typing import Any, List, Optional
 
-from deepagents import create_deep_agent
+from deepagents import HarnessProfile, create_deep_agent, register_harness_profile
 from langfuse.langchain import CallbackHandler
 
 from app.config import Settings
@@ -336,12 +336,30 @@ def build_model(settings: Settings, model_name: Optional[str] = None):
         raise ValueError(f"Unsupported model_provider: {settings.model_provider}")
 
 
+# deepagents ships filesystem/scratchpad tools this app never uses. Their
+# schemas are re-sent on every model call (~2k tokens), which makes Groq's
+# per-minute token limit bite sooner. A HarnessProfile hides them from the
+# model (main agent and sub-agents); `task` and our MCP tools are untouched.
+UNUSED_BUILTIN_TOOLS = frozenset(
+    {"ls", "read_file", "write_file", "edit_file", "delete", "glob", "grep", "write_todos", "execute"}
+)
+
+
+def hide_unused_builtin_tools(settings: Settings) -> None:
+    if not settings.hide_builtin_file_tools:
+        return
+    register_harness_profile(
+        settings.model_provider, HarnessProfile(excluded_tools=UNUSED_BUILTIN_TOOLS)
+    )
+
+
 def build_agent(tools: List[Any], settings: Settings):
     """
     Creates the deepagents agent wired to the given tools (from MCP) and
     the configured model provider. Sub-agents, etc. get extended here in
     later phases.
     """
+    hide_unused_builtin_tools(settings)
     model = build_model(settings)
     tools = make_optional_args_nullable(normalize_empty_tool_results(tools))
 
