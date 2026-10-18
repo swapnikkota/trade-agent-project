@@ -447,10 +447,12 @@ def hide_unused_builtin_tools(settings: Settings) -> None:
     if not settings.hide_builtin_file_tools:
         return
     keep = {n.strip() for n in settings.keep_builtin_tools.split(",") if n.strip()}
+    excluded = UNUSED_BUILTIN_TOOLS - keep
     register_harness_profile(
         settings.model_provider,
-        HarnessProfile(excluded_tools=UNUSED_BUILTIN_TOOLS - keep),
+        HarnessProfile(excluded_tools=excluded),
     )
+    logger.info("Hiding built-in tools for provider %r: %s", settings.model_provider, sorted(excluded))
 
 
 def build_agent(tools: List[Any], settings: Settings):
