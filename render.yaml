@@ -76,6 +76,10 @@ services:
     envVars:
       - key: GROQ_API_KEY
         sync: false
+      # Only needed for the optional Gemini route (GEMINI_VIA_GATEWAY=true on
+      # the backend); see gateway/config.example.yaml.
+      - key: GEMINI_API_KEY
+        sync: false
       # Render routes traffic to $PORT; the gateway config listens on 3000.
       - key: PORT
         value: "3000"

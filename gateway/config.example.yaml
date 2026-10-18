@@ -23,6 +23,31 @@ gateways:
           user: trade-agent-backend
 
 routes:
+# Gemini (optional): only requests carrying "x-provider: gemini" land here, which
+# is what the backend sends when GEMINI_VIA_GATEWAY=true. The key comes from the
+# GEMINI_API_KEY env var on the gateway. Gemini speaks Google's native API
+# (/v1beta/models/<model>:generateContent), so the model comes from the URL and
+# there is no `model:` override. If the gateway rejects this block at startup,
+# delete it: the Groq route below keeps working on its own.
+- matches:
+  - headers:
+    - name: x-provider
+      value:
+        exact: gemini
+  backends:
+  - ai:
+      name: gemini
+      provider:
+        gemini: {}
+  policies:
+    ai:
+      routes:
+        ":generateContent": "generateContent"
+        ":streamGenerateContent": "generateContent"
+        ":countTokens": "geminiCountTokens"
+    backendAuth:
+      key: "$GEMINI_API_KEY"
+# Default route (no match): everything else goes to Groq.
 - backends:
   - ai:
       name: groq

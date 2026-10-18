@@ -339,11 +339,32 @@ def build_model(settings: Settings, model_name: Optional[str] = None):
         raise ValueError(f"Unsupported model_provider: {settings.model_provider}")
 
 
+def _gemini_via_gateway(settings: Settings) -> bool:
+    return bool(settings.gemini_via_gateway and settings.llm_gateway_url)
+
+
 def build_gemini(settings: Settings):
-    """Gemini chat model (direct to Google). Imported lazily so the package is
-    only needed when a Gemini option is switched on."""
+    """Gemini chat model. Imported lazily so the package is only needed when a
+    Gemini option is switched on.
+
+    Direct to Google by default. With GEMINI_VIA_GATEWAY=true (and
+    LLM_GATEWAY_URL set) it goes through the gateway: we authenticate to the
+    gateway with its inbound key, and the x-provider header selects the
+    gateway's Gemini route, which adds the real Google key.
+    """
     from langchain_google_genai import ChatGoogleGenerativeAI
 
+    if _gemini_via_gateway(settings):
+        return ChatGoogleGenerativeAI(
+            model=settings.gemini_model,
+            google_api_key="held-by-gateway",  # placeholder; the gateway swaps in the real key
+            base_url=settings.llm_gateway_url.rstrip("/"),
+            additional_headers={
+                "Authorization": f"Bearer {settings.llm_gateway_api_key}",
+                "x-provider": "gemini",
+            },
+            temperature=0,
+        )
     return ChatGoogleGenerativeAI(
         model=settings.gemini_model,
         google_api_key=settings.gemini_api_key,
@@ -354,7 +375,7 @@ def build_gemini(settings: Settings):
 def _gemini_enabled(settings: Settings, wanted: bool, what: str) -> bool:
     if not wanted:
         return False
-    if not settings.gemini_api_key:
+    if not settings.gemini_api_key and not _gemini_via_gateway(settings):
         logger.warning("%s=gemini but GEMINI_API_KEY is empty: ignoring", what)
         return False
     return True

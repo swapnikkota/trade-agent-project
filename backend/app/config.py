@@ -180,6 +180,10 @@ class Settings(BaseSettings):
     gemini_model: str = "gemini-3.8-flash"
     subagent_provider: Literal["", "groq", "gemini"] = ""
     fallback_provider: Literal["", "gemini"] = ""
+    # Send Gemini calls through the LLM gateway (LLM_GATEWAY_URL) instead of
+    # straight to Google. The gateway then holds GEMINI_API_KEY (the backend
+    # does not need it) and picks the Gemini route from an x-provider header.
+    gemini_via_gateway: bool = False
 
     @property
     def database_url(self) -> str:
