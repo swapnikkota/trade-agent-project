@@ -22,3 +22,5 @@ frontend/dist/
 
 # Logs
 *.log
+
+eval_results.json
