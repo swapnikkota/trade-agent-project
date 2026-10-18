@@ -368,8 +368,49 @@ def _fallback_middleware(settings: Settings) -> List[Any]:
     if not _gemini_enabled(settings, settings.fallback_provider == "gemini", "FALLBACK_PROVIDER"):
         return []
     from langchain.agents.middleware import ModelFallbackMiddleware
+    from langgraph.errors import GraphBubbleUp
 
-    return [ModelFallbackMiddleware(build_gemini(settings))]
+    class LoggingFallbackMiddleware(ModelFallbackMiddleware):
+        """Same behaviour, but logs each time the fallback is used.
+
+        Gemini's free tier has its own rate limits; these lines show how
+        often the app leans on it. Search the logs for "model fallback".
+        """
+
+        def _note(self, request: Any, exc: Exception) -> None:
+            if request.model in self.models:
+                logger.warning("model fallback: %s also failed: %s: %.200s",
+                               type(request.model).__name__, type(exc).__name__, exc)
+            else:
+                logger.warning("model fallback: %s failed (%s: %.200s); retrying on %s",
+                               type(request.model).__name__, type(exc).__name__, exc,
+                               settings.gemini_model)
+
+        async def awrap_model_call(self, request, handler):  # type: ignore[override]
+            async def logged(req):
+                try:
+                    return await handler(req)
+                except GraphBubbleUp:
+                    raise
+                except Exception as exc:
+                    self._note(req, exc)
+                    raise
+
+            return await super().awrap_model_call(request, logged)
+
+        def wrap_model_call(self, request, handler):  # type: ignore[override]
+            def logged(req):
+                try:
+                    return handler(req)
+                except GraphBubbleUp:
+                    raise
+                except Exception as exc:
+                    self._note(req, exc)
+                    raise
+
+            return super().wrap_model_call(request, logged)
+
+    return [LoggingFallbackMiddleware(build_gemini(settings))]
 
 
 # deepagents ships filesystem/scratchpad tools this app never uses. Their
