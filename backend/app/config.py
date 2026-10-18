@@ -177,7 +177,7 @@ class Settings(BaseSettings):
     # Needs GEMINI_API_KEY. Verify tool calling on your model before relying
     # on it (gpt-oss-20b looked fine on Groq and then failed tool calls).
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.5-flash"
+    gemini_model: str = "gemini-3.8-flash"
     subagent_provider: Literal["", "groq", "gemini"] = ""
     fallback_provider: Literal["", "gemini"] = ""
 
