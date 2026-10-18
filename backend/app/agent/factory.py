@@ -3,12 +3,15 @@ deepagents agent factory, instrumented with Langfuse.
 """
 import copy
 import functools
+import logging
 from typing import Any, List, Optional
 
 from deepagents import HarnessProfile, create_deep_agent, register_harness_profile
 from langfuse.langchain import CallbackHandler
 
 from app.config import Settings
+
+logger = logging.getLogger("trade_agent")
 
 TRADE_AGENT_INSTRUCTIONS = """You are a trading data assistant.
 
@@ -336,6 +339,39 @@ def build_model(settings: Settings, model_name: Optional[str] = None):
         raise ValueError(f"Unsupported model_provider: {settings.model_provider}")
 
 
+def build_gemini(settings: Settings):
+    """Gemini chat model (direct to Google). Imported lazily so the package is
+    only needed when a Gemini option is switched on."""
+    from langchain_google_genai import ChatGoogleGenerativeAI
+
+    return ChatGoogleGenerativeAI(
+        model=settings.gemini_model,
+        google_api_key=settings.gemini_api_key,
+        temperature=0,
+    )
+
+
+def _gemini_enabled(settings: Settings, wanted: bool, what: str) -> bool:
+    if not wanted:
+        return False
+    if not settings.gemini_api_key:
+        logger.warning("%s=gemini but GEMINI_API_KEY is empty: ignoring", what)
+        return False
+    return True
+
+
+def _fallback_middleware(settings: Settings) -> List[Any]:
+    """ModelFallbackMiddleware that re-runs a failed model call on Gemini.
+
+    Fresh instance per agent (main and each sub-agent); returns [] when off.
+    """
+    if not _gemini_enabled(settings, settings.fallback_provider == "gemini", "FALLBACK_PROVIDER"):
+        return []
+    from langchain.agents.middleware import ModelFallbackMiddleware
+
+    return [ModelFallbackMiddleware(build_gemini(settings))]
+
+
 # deepagents ships filesystem/scratchpad tools this app never uses. Their
 # schemas are re-sent on every model call (~2k tokens), which makes Groq's
 # per-minute token limit bite sooner. A HarnessProfile hides them from the
@@ -375,8 +411,18 @@ def build_agent(tools: List[Any], settings: Settings):
         # set (Groq only), which gives them their own rate-limit bucket.
         # Tools are explicit and read-only: neither can call create_trade.
         subagent_extra: dict = {}
-        if settings.subagent_model and settings.model_provider == "groq":
+        sub_on_gemini = False
+        if _gemini_enabled(settings, settings.subagent_provider == "gemini", "SUBAGENT_PROVIDER"):
+            subagent_extra["model"] = build_gemini(settings)
+            sub_on_gemini = True
+        elif settings.subagent_model and settings.model_provider == "groq":
             subagent_extra["model"] = build_model(settings, settings.subagent_model)
+
+        def _sub_fallback() -> dict:
+            # A fresh middleware per sub-agent; pointless if it already runs on Gemini.
+            mw = [] if sub_on_gemini else _fallback_middleware(settings)
+            return {"middleware": mw} if mw else {}
+
         subagents.append(
             {
                 "name": "portfolio_analyst",
@@ -389,6 +435,7 @@ def build_agent(tools: List[Any], settings: Settings):
                 "system_prompt": PORTFOLIO_ANALYST_PROMPT,
                 "tools": read_only_tools,
                 **subagent_extra,
+                **_sub_fallback(),
             }
         )
         system_prompt += PORTFOLIO_ANALYST_DELEGATION
@@ -404,7 +451,8 @@ def build_agent(tools: List[Any], settings: Settings):
                     ),
                     "system_prompt": ANSWER_VERIFIER_PROMPT,
                     "tools": read_only_tools,
-                **subagent_extra,
+                    **subagent_extra,
+                    **_sub_fallback(),
                 }
             )
             system_prompt += VERIFIER_DELEGATION
@@ -414,5 +462,6 @@ def build_agent(tools: List[Any], settings: Settings):
         system_prompt=system_prompt,
         model=model,
         subagents=subagents or None,
+        middleware=_fallback_middleware(settings),
     )
     return agent

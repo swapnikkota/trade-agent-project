@@ -168,6 +168,19 @@ class Settings(BaseSettings):
     # verified another model handles tool calling reliably here.
     subagent_model: str = ""
 
+    # Google Gemini (optional second provider, called directly, not via the
+    # gateway). Used for two independent things:
+    #   SUBAGENT_PROVIDER=gemini  -> sub-agents run on Gemini instead of Groq
+    #   FALLBACK_PROVIDER=gemini  -> if a Groq call fails (after its own
+    #                                retries), that one call is re-tried on
+    #                                Gemini, for the main agent and sub-agents
+    # Needs GEMINI_API_KEY. Verify tool calling on your model before relying
+    # on it (gpt-oss-20b looked fine on Groq and then failed tool calls).
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-2.5-flash"
+    subagent_provider: Literal["", "groq", "gemini"] = ""
+    fallback_provider: Literal["", "gemini"] = ""
+
     @property
     def database_url(self) -> str:
         if self.database_url_override:
