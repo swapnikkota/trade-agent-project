@@ -339,6 +339,12 @@ def build_model(settings: Settings, model_name: Optional[str] = None):
         raise ValueError(f"Unsupported model_provider: {settings.model_provider}")
 
 
+# The client's default is 6 retries with growing waits. That rides out a
+# transient 503, but on a daily-quota 429 it just burns ~30s before failing, so
+# keep it small.
+GEMINI_MAX_RETRIES = 2
+
+
 def _gemini_via_gateway(settings: Settings) -> bool:
     return bool(settings.gemini_via_gateway and settings.llm_gateway_url)
 
@@ -364,11 +370,13 @@ def build_gemini(settings: Settings):
                 "x-provider": "gemini",
             },
             temperature=0,
+            max_retries=GEMINI_MAX_RETRIES,
         )
     return ChatGoogleGenerativeAI(
         model=settings.gemini_model,
         google_api_key=settings.gemini_api_key,
         temperature=0,
+        max_retries=GEMINI_MAX_RETRIES,
     )
 
 
