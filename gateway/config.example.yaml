@@ -2,8 +2,13 @@
 #
 # Template for the gateway's config. Do NOT commit real keys.
 # On Render: service trade-agent-gateway -> Environment -> Secret Files ->
-# add a file named config.yaml with this content, replacing REPLACE_ME with
-# a long random string (this is what the backend sends as LLM_GATEWAY_API_KEY).
+# add a file named config.yaml with this content and replace:
+#   REPLACE_ME_LLM_KEY      long random string = backend's LLM_GATEWAY_API_KEY
+#   REPLACE_ME_BROWSER_KEY  long random string = frontend's VITE_API_KEY
+#   REPLACE_ME_BACKEND_KEY  long random string = backend's API_KEY
+#   BACKEND_HOST            e.g. trade-agent-backend-boog.onrender.com
+#   YOUR-FRONTEND           the frontend's onrender.com subdomain
+# Three different secrets; never reuse one for two jobs.
 # The Groq key itself comes from the GROQ_API_KEY env var on the gateway.
 #
 # Structure follows agentgateway's "routing-based configuration" docs; if the
@@ -13,16 +18,74 @@ gateways:
   default:
     port: 3000
     protocol: HTTP
-    # Callers must present a valid key (strict), otherwise anyone who finds
-    # the URL could spend the Groq quota.
-    apiKey:
-      mode: strict
-      keys:
-      - key: REPLACE_ME
-        metadata:
-          user: trade-agent-backend
+    # No gateway-wide apiKey any more: each route carries its own policy so
+    # the LLM key (backend -> Groq/Gemini) and the browser key (frontend ->
+    # backend) are different secrets. A key valid on one route is rejected
+    # on the other.
 
 routes:
+# --- Edge routes: browser -> gateway -> trade-agent-backend -----------------
+# The frontend (VITE_API_BASE_URL) points at THIS gateway, not the backend.
+# The browser key below is checked here; the gateway then swaps in the
+# backend's own API_KEY, which only the gateway knows. The backend's URL stays
+# public on Render, but without that key it answers 401.
+# Needs: BACKEND_HOST below set to your backend's hostname (no scheme).
+
+# Health: no key (mirrors the backend, where /health is public).
+- matches:
+  - path:
+      pathPrefix: /health
+  backends:
+  - host: BACKEND_HOST:443
+  policies:
+    backendTLS: {}
+    urlRewrite:
+      authority:
+        full: BACKEND_HOST
+
+# Chat + threads: browser key, CORS, edge rate limit.
+- matches:
+  - path:
+      pathPrefix: /chat
+  - path:
+      pathPrefix: /threads
+  backends:
+  - host: BACKEND_HOST:443
+  policies:
+    # CORS answered here (including preflight). Set the backend's CORS_ORIGINS
+    # to empty so the backend does not add a second set of CORS headers.
+    cors:
+      allowOrigins:
+      - https://YOUR-FRONTEND.onrender.com
+      allowMethods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"]
+      allowHeaders: ["content-type", "x-api-key"]
+      maxAge: 600s
+    # Browser key (X-API-Key). Different from the LLM key above.
+    apiKey:
+      mode: strict
+      location:
+        header:
+          name: x-api-key
+      keys:
+      - key: REPLACE_ME_BROWSER_KEY
+        metadata:
+          user: trade-agent-frontend
+    # Edge rate limit across all browser traffic: 60 requests/minute.
+    localRateLimit:
+    - maxTokens: 60
+      tokensPerFill: 60
+      fillInterval: 60s
+      type: requests
+    # Replace the browser key with the backend's secret (backend API_KEY).
+    requestHeaderModifier:
+      set:
+        x-api-key: REPLACE_ME_BACKEND_KEY
+    backendTLS: {}
+    urlRewrite:
+      authority:
+        full: BACKEND_HOST
+
+# --- LLM routes: backend -> gateway -> Groq / Gemini -------------------------
 # Gemini (optional): only requests carrying "x-provider: gemini" land here, which
 # is what the backend sends when GEMINI_VIA_GATEWAY=true. The key comes from the
 # GEMINI_API_KEY env var on the gateway. Gemini speaks Google's native API
@@ -40,6 +103,13 @@ routes:
       provider:
         gemini: {}
   policies:
+    # LLM key: what the backend sends as LLM_GATEWAY_API_KEY (Authorization: Bearer).
+    apiKey:
+      mode: strict
+      keys:
+      - key: REPLACE_ME_LLM_KEY
+        metadata:
+          user: trade-agent-backend
     ai:
       routes:
         ":generateContent": "generateContent"
@@ -57,6 +127,13 @@ routes:
         # backend asks for (GROQ_MODEL) is passed through unchanged.
         openAI: {}
   policies:
+    # LLM key: what the backend sends as LLM_GATEWAY_API_KEY (Authorization: Bearer).
+    apiKey:
+      mode: strict
+      keys:
+      - key: REPLACE_ME_LLM_KEY
+        metadata:
+          user: trade-agent-backend
     urlRewrite:
       authority:
         full: api.groq.com

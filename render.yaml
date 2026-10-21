@@ -47,9 +47,10 @@ services:
       # tables inside it on startup but won't create the schema itself.
       - key: POSTGRES_SCHEMA
         value: trade_agent
-      # Shared-secret API key (Phase 6). Leave unset to keep auth off, or
-      # set a random value here and match it in the frontend's
-      # VITE_API_KEY build env var below.
+      # Shared-secret API key (Phase 6). Leave unset to keep auth off. With
+      # edge auth this is a secret only the gateway knows (REPLACE_ME_BACKEND_KEY
+      # in its config), and CORS_ORIGINS below is set empty (the gateway does CORS).
+      # Without edge auth, match it in the frontend's VITE_API_KEY.
       - key: API_KEY
         sync: false
       # The deployed frontend's Render URL, once known (Static Sites don't
@@ -94,10 +95,12 @@ services:
     buildCommand: npm install && npm run build
     staticPublishPath: dist
     envVars:
-      # The deployed backend service's Render URL (no trailing slash).
+      # With edge auth: the GATEWAY's Render URL (no trailing slash), not the
+      # backend's. Without it: the backend's URL.
       - key: VITE_API_BASE_URL
         sync: false
-      # Must match the backend's API_KEY above exactly, or every request
-      # from the UI gets a 401. Leave both unset to keep auth off.
+      # With edge auth: must match REPLACE_ME_BROWSER_KEY in the gateway config.
+      # Without it: must match the backend's API_KEY exactly. A 401 on every
+      # request means a mismatch. Note this value is public in the JS bundle.
       - key: VITE_API_KEY
         sync: false
