@@ -69,7 +69,7 @@ export async function deleteThread(threadId: string): Promise<void> {
  * Streams a /chat response as an async generator of parsed ChatEvents.
  *
  * The backend uses sse-starlette, which emits standard SSE frames
- * ("event: message\ndata: {...}\n\n"). We can't use the native
+ * ("event: message\r\ndata: {...}\r\n\r\n"). We can't use the native
  * EventSource here because it only supports GET requests, and /chat is a
  * POST — so we read the raw fetch body stream and parse SSE frames by
  * hand instead.
@@ -124,7 +124,10 @@ export async function* streamChat(params: {
   while (true) {
     const { value, done } = await reader.read();
     if (done) break;
-    buffer += decoder.decode(value, { stream: true });
+    // sse-starlette ends lines with "\r\n" (frames end "\r\n\r\n"). Normalise to
+    // "\n" so frames split on a blank line; a trailing lone "\r" stays in the
+    // buffer until its "\n" arrives in the next chunk.
+    buffer = (buffer + decoder.decode(value, { stream: true })).replace(/\r\n/g, "\n");
 
     // SSE frames are separated by a blank line.
     const frames = buffer.split("\n\n");
