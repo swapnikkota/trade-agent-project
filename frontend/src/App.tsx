@@ -8,6 +8,9 @@ import "./App.css";
 
 const USER_ID_STORAGE_KEY = "trade-agent.user-id";
 
+// Abort a chat request that has produced no event for this long.
+const STALL_MS = 120_000;
+
 export default function App() {
   const [userId, setUserId] = useState(
     () => localStorage.getItem(USER_ID_STORAGE_KEY) ?? "swapnik",
@@ -115,6 +118,21 @@ export default function App() {
     const controller = new AbortController();
     abortRef.current = controller;
 
+    // A turn is only complete if the server said so ("done" or "error").
+    // If the stream just ends, or goes silent for STALL_MS (a dropped
+    // connection, a stalled model call), report it instead of showing nothing.
+    let finished = false;
+    let stalled = false;
+    let watchdog: ReturnType<typeof setTimeout> | undefined;
+    const armWatchdog = () => {
+      if (watchdog) clearTimeout(watchdog);
+      watchdog = setTimeout(() => {
+        stalled = true;
+        controller.abort();
+      }, STALL_MS);
+    };
+    armWatchdog();
+
     try {
       for await (const event of streamChat({
         message: text,
@@ -122,6 +140,7 @@ export default function App() {
         threadId: activeThreadId,
         signal: controller.signal,
       })) {
+        armWatchdog();
         if (event.type === "status") {
           setSteps((prev) => {
             if (event.phase === "start") {
@@ -149,11 +168,17 @@ export default function App() {
           // than replacing — assistant_delta events are incremental.
           setStreamingAssistant((prev) => (prev ?? "") + event.content);
         } else if (event.type === "error") {
+          finished = true;
           setError(event.content);
           setLastFailedMessage(text);
         } else if (event.type === "done") {
-          // no-op; handled after the loop
+          finished = true;
         }
+      }
+
+      if (!finished) {
+        setError("The connection ended before the answer finished. Please retry.");
+        setLastFailedMessage(text);
       }
 
       // Re-sync from the server so ids/timestamps are canonical and we
@@ -166,9 +191,16 @@ export default function App() {
       setMessages(history);
       setThreads(refreshedThreads);
     } catch (e) {
-      setError(String(e));
+      setError(
+        stalled
+          ? "No response for a while, so the request was stopped. Please retry."
+          : String(e),
+      );
       setLastFailedMessage(text);
+      // Show what the server did persist (the question, maybe a partial reply).
+      void getThreadMessages(activeThreadId).then(setMessages).catch(() => {});
     } finally {
+      if (watchdog) clearTimeout(watchdog);
       setStreamingAssistant(null);
       setSteps([]);
       setSending(false);
