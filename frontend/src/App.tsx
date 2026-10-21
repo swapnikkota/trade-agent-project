@@ -191,14 +191,30 @@ export default function App() {
       setMessages(history);
       setThreads(refreshedThreads);
     } catch (e) {
-      setError(
-        stalled
-          ? "No response for a while, so the request was stopped. Please retry."
-          : String(e),
-      );
-      setLastFailedMessage(text);
-      // Show what the server did persist (the question, maybe a partial reply).
-      void getThreadMessages(activeThreadId).then(setMessages).catch(() => {});
+      if (finished) {
+        // The server already sent "done" (or "error") and the connection was
+        // then cut (Safari: "TypeError: Load failed"). The turn is complete,
+        // so don't report a failure; just reload what was saved.
+        try {
+          const [history, refreshedThreads] = await Promise.all([
+            getThreadMessages(activeThreadId),
+            listThreads(userId),
+          ]);
+          setMessages(history);
+          setThreads(refreshedThreads);
+        } catch {
+          // Leave the streamed state as is; the next action re-syncs.
+        }
+      } else {
+        setError(
+          stalled
+            ? "No response for a while, so the request was stopped. Please retry."
+            : String(e),
+        );
+        setLastFailedMessage(text);
+        // Show what the server did persist (the question, maybe a partial reply).
+        void getThreadMessages(activeThreadId).then(setMessages).catch(() => {});
+      }
     } finally {
       if (watchdog) clearTimeout(watchdog);
       setStreamingAssistant(null);
